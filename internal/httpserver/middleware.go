@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -35,13 +36,23 @@ func accessLogMiddleware(next http.Handler) http.Handler {
 
 func preChecksMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
+		if r.Method != http.MethodPost {
 			http.Error(w, "Only POST requests are allowed!", http.StatusBadRequest)
 			return
 		}
 
-		if r.Header.Get("Content-Type") != "text/plain" {
-			http.Error(w, "Only text/plain content-type allowed!", http.StatusBadRequest)
+		params := strings.Split(r.URL.Path, "/")
+
+		if len(params) != 5 {
+			http.Error(w, "Wrong parameters number!", http.StatusNotFound)
+			return
+		}
+		if params[4] == "" {
+			http.Error(w, "Wrong value!", http.StatusNotFound)
+			return
+		}
+		if params[2] != "gauge" && params[2] != "counter" {
+			http.Error(w, "Incorrect metric type!", http.StatusBadRequest)
 			return
 		}
 

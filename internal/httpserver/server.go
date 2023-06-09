@@ -16,7 +16,7 @@ func New(cfg Config) {
 	gaugeHandler := &handlers.Gauge{MemStorage: st}
 	counterHandler := &handlers.Counter{MemStorage: st}
 
-	// Шаблон роутов http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
+	//http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
 	mux := http.NewServeMux()
 	mux.Handle("/update/gauge/", gaugeHandler)
 	mux.Handle("/update/counter/", counterHandler)
