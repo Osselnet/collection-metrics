@@ -4,7 +4,7 @@ import (
 	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -73,7 +73,7 @@ func TestServeHTTP(t *testing.T) {
 
 			assert.Equal(t, tt.want.statusCode, result.StatusCode)
 
-			_, err := ioutil.ReadAll(result.Body)
+			_, err := io.ReadAll(result.Body)
 			require.NoError(t, err)
 			err = result.Body.Close()
 			require.NoError(t, err)
