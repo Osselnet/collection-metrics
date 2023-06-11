@@ -2,7 +2,7 @@ package httpserver
 
 import (
 	"github.com/Osselnet/metrics-collector/internal/handlers"
-	"github.com/Osselnet/metrics-collector/internal/memstorage"
+	"github.com/Osselnet/metrics-collector/internal/storage"
 	"net/http"
 )
 
@@ -12,7 +12,7 @@ type Config struct {
 }
 
 func New(cfg Config) {
-	st := memstorage.New()
+	st := storage.New()
 	gaugeHandler := &handlers.Gauge{MemStorage: st}
 	counterHandler := &handlers.Counter{MemStorage: st}
 

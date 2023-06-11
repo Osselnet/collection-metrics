@@ -1,4 +1,4 @@
-package memstorage
+package storage
 
 import (
 	"github.com/Osselnet/metrics-collector/pkg/metrics"

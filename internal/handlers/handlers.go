@@ -2,18 +2,18 @@ package handlers
 
 import (
 	"fmt"
-	"github.com/Osselnet/metrics-collector/internal/memstorage"
+	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"net/http"
 	"strings"
 )
 
 type Gauge struct {
-	*memstorage.MemStorage
+	*storage.MemStorage
 }
 
 type Counter struct {
-	*memstorage.MemStorage
+	*storage.MemStorage
 }
 
 func (g *Gauge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
