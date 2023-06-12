@@ -68,8 +68,7 @@ func TestAgent_sendReport(t *testing.T) {
 				Timeout:        4 * time.Second,
 				PollInterval:   2 * time.Second,
 				ReportInterval: 10 * time.Second,
-				Address:        "127.0.0.1",
-				Port:           ":" + params[len(params)-1],
+				Address:        "127.0.0.1:" + params[len(params)-1],
 			}
 			a, err := New(cfg)
 			assert.NoError(t, err)

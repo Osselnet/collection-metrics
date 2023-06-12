@@ -16,7 +16,6 @@ type Config struct {
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 	Address        string
-	Port           string
 }
 
 type Agent struct {
@@ -37,9 +36,6 @@ func New(cfg Config) (*Agent, error) {
 	}
 	if cfg.Address == "" {
 		return nil, fmt.Errorf("you need to ask server address")
-	}
-	if cfg.Port == "" {
-		return nil, fmt.Errorf("you need to ask server port")
 	}
 
 	a := &Agent{
@@ -83,9 +79,9 @@ func (a *Agent) sendRequest(key metrics.Name, value any) int {
 
 	switch metric := value.(type) {
 	case metrics.Gauge:
-		endpoint = fmt.Sprintf("http://%s%s/update/%s/%s/%f", a.Cfg.Address, a.Cfg.Port, "gauge", key, metric)
+		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%f", a.Cfg.Address, "gauge", key, metric)
 	case metrics.Counter:
-		endpoint = fmt.Sprintf("http://%s%s/update/%s/%s/%d", a.Cfg.Address, a.Cfg.Port, "counter", key, metric)
+		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%d", a.Cfg.Address, "counter", key, metric)
 	default:
 		a.handleError(fmt.Errorf("unknown metric type"))
 		return http.StatusBadRequest

@@ -6,14 +6,11 @@ import (
 )
 
 type Config struct {
-	Address string
-	Port    string
+	Addr string
 }
 
 func New(h *handlers.Handler, cfg Config) {
-
-	addr := cfg.Address + ":" + cfg.Port
-	err := http.ListenAndServe(addr, h.GetRouter())
+	err := http.ListenAndServe(cfg.Addr, h.GetRouter())
 	if err != nil {
 		panic(err)
 	}
