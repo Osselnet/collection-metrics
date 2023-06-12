@@ -13,34 +13,42 @@ import (
 )
 
 type Handler struct {
-	Router  chi.Router
+	router  chi.Router
 	storage *storage.MemStorage
 }
 
 func New() *Handler {
 	h := &Handler{
-		Router:  chi.NewRouter(),
+		router:  chi.NewRouter(),
 		storage: storage.New(),
 	}
 
-	h.Router.Use(middleware.RequestID)
-	h.Router.Use(middleware.RealIP)
-	h.Router.Use(middleware.Logger)
-	h.Router.Use(middleware.Recoverer)
+	h.router.Use(middleware.RequestID)
+	h.router.Use(middleware.RealIP)
+	h.router.Use(middleware.Logger)
+	h.router.Use(middleware.Recoverer)
 
 	h.setRoutes()
 
 	return h
 }
 
+func (h *Handler) WithStorage(st *storage.MemStorage) {
+	h.storage = st
+}
+
 func (h *Handler) setRoutes() {
-	h.Router.Get("/", h.List)
+	h.router.Get("/", h.List)
 
 	//POST http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
-	h.Router.Post("/update/{type}/{name}/{value}", h.Post)
+	h.router.Post("/update/{type}/{name}/{value}", h.Post)
 
 	//GET http://<АДРЕС_СЕРВЕРА>/value/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>
-	h.Router.Get("/value/{type}/{name}", h.Get)
+	h.router.Get("/value/{type}/{name}", h.Get)
+}
+
+func (h *Handler) GetRouter() chi.Router {
+	return h.router
 }
 
 func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {

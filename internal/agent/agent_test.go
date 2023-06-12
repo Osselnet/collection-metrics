@@ -60,7 +60,7 @@ func TestAgent_sendReport(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := handlers.New()
-			server := httptest.NewServer(h.Router)
+			server := httptest.NewServer(h.GetRouter())
 			defer server.Close()
 
 			params := strings.Split(server.URL, ":")

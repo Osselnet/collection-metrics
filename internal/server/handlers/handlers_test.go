@@ -86,9 +86,9 @@ func TestHandler_Get(t *testing.T) {
 		value      string
 	}
 	tests := []struct {
-		name string
-		*storage.MemStorage
-		request string
+		name       string
+		MemStorage *storage.MemStorage
+		request    string
 		want
 	}{
 		{
@@ -152,6 +152,7 @@ func TestHandler_Get(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := New()
+			handler.WithStorage(tt.MemStorage)
 			r := chi.NewRouter()
 			r.Get("/value/{type}/{name}", handler.Get)
 

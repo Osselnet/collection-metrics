@@ -13,7 +13,7 @@ type Config struct {
 func New(h *handlers.Handler, cfg Config) {
 
 	addr := cfg.Address + ":" + cfg.Port
-	err := http.ListenAndServe(addr, h.Router)
+	err := http.ListenAndServe(addr, h.GetRouter())
 	if err != nil {
 		panic(err)
 	}
