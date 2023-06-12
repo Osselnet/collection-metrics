@@ -1,9 +1,9 @@
-package main
+package agent
 
 import (
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
-	"io"
+	"github.com/go-resty/resty/v2"
 	"log"
 	"math/rand"
 	"net/http"
@@ -22,7 +22,7 @@ type Config struct {
 type Agent struct {
 	*metrics.Metrics
 	Cfg    Config
-	client http.Client
+	client *resty.Client
 }
 
 func New(cfg Config) (*Agent, error) {
@@ -45,13 +45,9 @@ func New(cfg Config) (*Agent, error) {
 	a := &Agent{
 		Cfg:     cfg,
 		Metrics: metrics.New(),
-		client: http.Client{
-			Timeout: cfg.Timeout,
-			Transport: &http.Transport{
-				MaxIdleConns: metrics.GaugeLen + metrics.CounterLen,
-			},
-		},
+		client:  resty.New(),
 	}
+	a.client.SetTimeout(cfg.Timeout)
 
 	return a, nil
 }
@@ -91,27 +87,25 @@ func (a *Agent) sendRequest(key metrics.Name, value any) int {
 	case metrics.Counter:
 		endpoint = fmt.Sprintf("http://%s%s/update/%s/%s/%d", a.Cfg.Address, a.Cfg.Port, "counter", key, metric)
 	default:
-		err := fmt.Errorf("unknown metric type")
-		a.handleError(err)
+		a.handleError(fmt.Errorf("unknown metric type"))
 		return http.StatusBadRequest
 	}
 
 	req, _ := http.NewRequest(http.MethodPost, endpoint, nil)
 	req.Header.Set("Content-Type", "text/plain")
 
-	response, err := a.client.Do(req)
+	response, err := a.client.R().
+		Post(endpoint)
+
 	if err != nil {
 		a.handleError(err)
-		return http.StatusBadRequest
 	}
 
-	_, err = io.Copy(io.Discard, response.Body)
-	if err != nil {
-		a.handleError(err)
-		return http.StatusBadRequest
+	if response.StatusCode() != http.StatusOK {
+		a.handleError(fmt.Errorf("%v", response.StatusCode()))
 	}
-	defer response.Body.Close()
-	return response.StatusCode
+
+	return response.StatusCode()
 }
 
 func (a *Agent) handleError(err error) {

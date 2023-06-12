@@ -1,8 +1,7 @@
-package main
+package agent
 
 import (
-	"github.com/Osselnet/metrics-collector/internal/handlers"
-	"github.com/Osselnet/metrics-collector/internal/storage"
+	"github.com/Osselnet/metrics-collector/internal/server/handlers"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"github.com/stretchr/testify/assert"
 	"net/http"
@@ -60,15 +59,8 @@ func TestAgent_sendReport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			st := storage.New()
-			gaugeHandler := &handlers.Gauge{MemStorage: st}
-			counterHandler := &handlers.Counter{MemStorage: st}
-
-			mux := http.NewServeMux()
-			mux.Handle("/update/gauge/", gaugeHandler)
-			mux.Handle("/update/counter/", counterHandler)
-
-			server := httptest.NewServer(http.Handler(mux))
+			h := handlers.New()
+			server := httptest.NewServer(h.Router)
 			defer server.Close()
 
 			params := strings.Split(server.URL, ":")

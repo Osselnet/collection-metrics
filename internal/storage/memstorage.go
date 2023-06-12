@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 )
 
@@ -31,4 +32,22 @@ func (s *MemStorage) Count(key metrics.Name, val metrics.Counter) {
 	}
 
 	s.Counters[key] += val
+}
+
+func (s *MemStorage) GetGauge(key metrics.Name) (*metrics.Gauge, error) {
+	gauge, ok := s.Gauges[key]
+	if !ok {
+		return nil, fmt.Errorf("gauge metric with key '%s' not found", key)
+	}
+
+	return &gauge, nil
+}
+
+func (s *MemStorage) GetCounter(key metrics.Name) (*metrics.Counter, error) {
+	counter, ok := s.Counters[key]
+	if !ok {
+		return nil, fmt.Errorf("counter metric with key '%s' not found", key)
+	}
+
+	return &counter, nil
 }
