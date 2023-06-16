@@ -20,9 +20,10 @@ type Config struct {
 
 type Agent struct {
 	*metrics.Metrics
-	Cfg    Config
 	client *resty.Client
 }
+
+var config Config
 
 func New(cfg Config) (*Agent, error) {
 	if cfg.Timeout == 0 {
@@ -38,8 +39,9 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("you need to ask server address")
 	}
 
+	config = cfg
+
 	a := &Agent{
-		Cfg:     cfg,
 		Metrics: metrics.New(),
 		client:  resty.New(),
 	}
@@ -49,15 +51,20 @@ func New(cfg Config) (*Agent, error) {
 }
 
 func (a *Agent) Run() {
-	go func() {
-		for {
-			time.Sleep(a.Cfg.PollInterval)
-			a.Update()
-		}
-	}()
+	go a.RunPool()
+	a.RunReport()
+}
 
+func (a *Agent) RunPool() {
 	for {
-		time.Sleep(a.Cfg.ReportInterval)
+		time.Sleep(config.PollInterval)
+		a.Update()
+	}
+}
+
+func (a *Agent) RunReport() {
+	for {
+		time.Sleep(config.ReportInterval)
 		a.sendReport()
 	}
 }
@@ -79,9 +86,9 @@ func (a *Agent) sendRequest(key metrics.Name, value any) int {
 
 	switch metric := value.(type) {
 	case metrics.Gauge:
-		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%f", a.Cfg.Address, "gauge", key, metric)
+		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%f", config.Address, "gauge", key, metric)
 	case metrics.Counter:
-		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%d", a.Cfg.Address, "counter", key, metric)
+		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%d", config.Address, "counter", key, metric)
 	default:
 		a.handleError(fmt.Errorf("unknown metric type"))
 		return http.StatusBadRequest

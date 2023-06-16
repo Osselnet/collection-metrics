@@ -52,7 +52,9 @@ func TestHandler_Post(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := New()
+			handler := New(chi.NewRouter(), &storage.MemStorage{
+				Metrics: metrics.New(),
+			})
 			r := chi.NewRouter()
 			r.Post("/update/{type}/{name}/{value}", handler.Post)
 
@@ -151,7 +153,9 @@ func TestHandler_Get(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := New()
+			handler := New(chi.NewRouter(), &storage.MemStorage{
+				Metrics: metrics.New(),
+			})
 			handler.WithStorage(tt.MemStorage)
 			r := chi.NewRouter()
 			r.Get("/value/{type}/{name}", handler.Get)
@@ -187,7 +191,9 @@ func TestHandler_List(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := New()
+			handler := New(chi.NewRouter(), &storage.MemStorage{
+				Metrics: metrics.New(),
+			})
 			r := chi.NewRouter()
 			r.Get("/", handler.List)
 

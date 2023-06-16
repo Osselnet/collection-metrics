@@ -43,6 +43,20 @@ type Name string
 
 type Gauge float64
 
+type Counter int64
+
+type Metrics struct {
+	Gauges   map[Name]Gauge
+	Counters map[Name]Counter
+}
+
+func New() *Metrics {
+	return &Metrics{
+		Gauges:   make(map[Name]Gauge, GaugeLen),
+		Counters: make(map[Name]Counter, CounterLen),
+	}
+}
+
 func (g *Gauge) FromString(str string) error {
 	val, err := strconv.ParseFloat(str, 64)
 	if err != nil {
@@ -55,8 +69,6 @@ func (g *Gauge) FromString(str string) error {
 	return nil
 }
 
-type Counter int64
-
 func (c *Counter) FromString(str string) error {
 	val, err := strconv.ParseInt(str, 10, 64)
 	if err != nil {
@@ -67,16 +79,4 @@ func (c *Counter) FromString(str string) error {
 	*c = counter
 
 	return nil
-}
-
-type Metrics struct {
-	Gauges   map[Name]Gauge
-	Counters map[Name]Counter
-}
-
-func New() *Metrics {
-	return &Metrics{
-		Gauges:   make(map[Name]Gauge, GaugeLen),
-		Counters: make(map[Name]Counter, CounterLen),
-	}
 }
