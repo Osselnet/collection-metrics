@@ -57,7 +57,7 @@ jobs:
           go install golang.org/x/tools/cmd/goimports@latest
 
 
-      - name: Build server binary
+      - name: Build httpserver binary
         run: |
           cd cmd/server
           go build -buildvcs=false -o server
