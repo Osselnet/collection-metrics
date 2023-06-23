@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/Osselnet/metrics-collector/internal/logger"
 	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -32,13 +33,13 @@ func (h *Handler) WithStorage(st *storage.MemStorage) {
 }
 
 func (h *Handler) setRoutes() {
-	h.router.Get("/", h.List)
+	h.router.Get("/", logger.LogHandler(h.List()))
 
 	//POST http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
-	h.router.Post("/update/{type}/{name}/{value}", h.Post)
+	h.router.Post("/update/{type}/{name}/{value}", logger.LogHandler(h.Post()))
 
 	//GET http://<АДРЕС_СЕРВЕРА>/value/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>
-	h.router.Get("/value/{type}/{name}", h.Get)
+	h.router.Get("/value/{type}/{name}", logger.LogHandler(h.Get()))
 }
 
 func (h *Handler) GetRouter() chi.Router {
