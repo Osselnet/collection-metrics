@@ -20,8 +20,8 @@ func New(router chi.Router, storage *storage.MemStorage) *Handler {
 
 	h.router.Use(middleware.RequestID)
 	h.router.Use(middleware.RealIP)
-	h.router.Use(middleware.Logger)
 	h.router.Use(middleware.Recoverer)
+	h.router.Use(logger.LogHandler)
 
 	h.setRoutes()
 
@@ -33,13 +33,16 @@ func (h *Handler) WithStorage(st *storage.MemStorage) {
 }
 
 func (h *Handler) setRoutes() {
-	h.router.Get("/", logger.LogHandler(h.List()))
+	h.router.Get("/", h.List)
 
 	//POST http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
-	h.router.Post("/update/{type}/{name}/{value}", logger.LogHandler(h.Post()))
+	h.router.Post("/update/{type}/{name}/{value}", h.Post)
 
 	//GET http://<АДРЕС_СЕРВЕРА>/value/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>
-	h.router.Get("/value/{type}/{name}", logger.LogHandler(h.Get()))
+	h.router.Get("/value/{type}/{name}", h.Get)
+
+	h.router.Post("/value/", h.JSONValue)
+	h.router.Post("/update/", h.JSONUpdate)
 }
 
 func (h *Handler) GetRouter() chi.Router {

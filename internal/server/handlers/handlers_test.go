@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/Osselnet/metrics-collector/internal/logger"
 	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"github.com/go-chi/chi/v5"
@@ -57,7 +56,7 @@ func TestHandler_Post(t *testing.T) {
 				Metrics: metrics.New(),
 			})
 			r := chi.NewRouter()
-			r.Post("/update/{type}/{name}/{value}", logger.LogHandler(handler.Post()))
+			r.Post("/update/{type}/{name}/{value}", handler.Post)
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
@@ -159,7 +158,7 @@ func TestHandler_Get(t *testing.T) {
 			})
 			handler.WithStorage(tt.MemStorage)
 			r := chi.NewRouter()
-			r.Get("/value/{type}/{name}", logger.LogHandler(handler.Get()))
+			r.Get("/value/{type}/{name}", handler.Get)
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
@@ -196,7 +195,7 @@ func TestHandler_List(t *testing.T) {
 				Metrics: metrics.New(),
 			})
 			r := chi.NewRouter()
-			r.Get("/", logger.LogHandler(handler.List()))
+			r.Get("/", handler.List)
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()

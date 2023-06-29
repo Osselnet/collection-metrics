@@ -48,7 +48,7 @@ func TestAgent_sendReport(t *testing.T) {
 			},
 		},
 		{
-			name: "Test Invalid Post request counter metric",
+			name: "Test Invalid Post request",
 			req: request{
 				key:   "MCacheSys",
 				value: "ab",
