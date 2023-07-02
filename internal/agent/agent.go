@@ -92,11 +92,11 @@ func (a *Agent) sendRequest(key metrics.Name, value any) int {
 	var endpoint = fmt.Sprintf("http://%s/update/", config.Address)
 	var met Metrics
 
-	switch value.(type) {
+	switch v := value.(type) {
 	case metrics.Gauge:
-		met = Metrics{ID: string(key), MType: "gauge", Value: value.(metrics.Gauge)}
+		met = Metrics{ID: string(key), MType: "gauge", Value: v}
 	case metrics.Counter:
-		met = Metrics{ID: string(key), MType: "counter", Delta: value.(metrics.Counter)}
+		met = Metrics{ID: string(key), MType: "counter", Delta: v}
 	default:
 		a.handleError(fmt.Errorf("unknown metric type"))
 		return http.StatusBadRequest
