@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
@@ -88,6 +90,23 @@ func (a *Agent) sendReport() {
 	log.Println("Report sent")
 }
 
+func Compress(data []byte) ([]byte, error) {
+	var b bytes.Buffer
+	w, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
+	if err != nil {
+		return nil, fmt.Errorf("failed init compress writer: %v", err)
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed write data to compress temporary buffer: %v", err)
+	}
+	err = w.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed compress data: %v", err)
+	}
+	return b.Bytes(), nil
+}
+
 func (a *Agent) sendRequest(key metrics.Name, value any) int {
 	var endpoint = fmt.Sprintf("http://%s/update/", config.Address)
 	var met Metrics
@@ -107,8 +126,15 @@ func (a *Agent) sendRequest(key metrics.Name, value any) int {
 		a.handleError(err)
 	}
 
+	data, err = Compress(data)
+	if err != nil {
+		a.handleError(err)
+	}
+
 	response, err := a.client.R().
 		SetBody(data).
+		SetHeader("Content-Encoding", "gzip").
+		SetHeader("Accept-Encoding", "gzip").
 		Post(endpoint)
 
 	if err != nil {

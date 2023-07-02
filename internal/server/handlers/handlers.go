@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/Osselnet/metrics-collector/internal/gzip"
 	"github.com/Osselnet/metrics-collector/internal/logger"
 	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,7 @@ func New(router chi.Router, storage *storage.MemStorage) *Handler {
 	h.router.Use(middleware.RealIP)
 	h.router.Use(middleware.Recoverer)
 	h.router.Use(logger.LogHandler)
+	h.router.Use(gzip.GzipHandle)
 
 	h.setRoutes()
 
