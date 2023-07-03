@@ -116,15 +116,9 @@ func (h *Handler) List(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) JSONValue(w http.ResponseWriter, r *http.Request) {
 	var m Metrics
-	var buf bytes.Buffer
 
-	_, err := buf.ReadFrom(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	err = json.Unmarshal(buf.Bytes(), &m)
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&m)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
+	"os"
 )
 
 type Repositories interface {
@@ -44,4 +46,28 @@ func (s *MemStorage) GetCounter(key metrics.Name) (*metrics.Counter, error) {
 	}
 
 	return &counter, nil
+}
+
+func (s *MemStorage) WriteDataToFile(filename string) error {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	err = f.Truncate(0)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
 }

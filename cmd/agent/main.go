@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/Osselnet/metrics-collector/internal/agent"
-	config "github.com/Osselnet/metrics-collector/internal/config/agent"
+	"github.com/Osselnet/metrics-collector/internal/agent/config"
 	"log"
 	"time"
 )
