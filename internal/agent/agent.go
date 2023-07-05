@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"github.com/go-resty/resty/v2"
@@ -21,6 +24,13 @@ type Config struct {
 type Agent struct {
 	*metrics.Metrics
 	client *resty.Client
+}
+
+type Metrics struct {
+	ID    string          `json:"id"`    // имя метрики
+	MType string          `json:"type"`  // параметр, принимающий значение gauge или counter
+	Delta metrics.Counter `json:"delta"` // значение метрики в случае передачи counter
+	Value metrics.Gauge   `json:"value"` // значение метрики в случае передачи gauge
 }
 
 var config Config
@@ -80,24 +90,51 @@ func (a *Agent) sendReport() {
 	log.Println("Report sent")
 }
 
-func (a *Agent) sendRequest(key metrics.Name, value any) int {
-	// http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
-	var endpoint string
+func Compress(data []byte) ([]byte, error) {
+	var b bytes.Buffer
+	w, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
+	if err != nil {
+		return nil, fmt.Errorf("failed init compress writer: %v", err)
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed write data to compress temporary buffer: %v", err)
+	}
+	err = w.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed compress data: %v", err)
+	}
+	return b.Bytes(), nil
+}
 
-	switch metric := value.(type) {
+func (a *Agent) sendRequest(key metrics.Name, value any) int {
+	var endpoint = fmt.Sprintf("http://%s/update/", config.Address)
+	var met Metrics
+
+	switch v := value.(type) {
 	case metrics.Gauge:
-		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%f", config.Address, "gauge", key, metric)
+		met = Metrics{ID: string(key), MType: "gauge", Value: v}
 	case metrics.Counter:
-		endpoint = fmt.Sprintf("http://%s/update/%s/%s/%d", config.Address, "counter", key, metric)
+		met = Metrics{ID: string(key), MType: "counter", Delta: v}
 	default:
 		a.handleError(fmt.Errorf("unknown metric type"))
 		return http.StatusBadRequest
 	}
 
-	req, _ := http.NewRequest(http.MethodPost, endpoint, nil)
-	req.Header.Set("Content-Type", "text/plain")
+	data, err := json.Marshal(met)
+	if err != nil {
+		a.handleError(err)
+	}
+
+	data, err = Compress(data)
+	if err != nil {
+		a.handleError(err)
+	}
 
 	response, err := a.client.R().
+		SetBody(data).
+		SetHeader("Content-Encoding", "gzip").
+		SetHeader("Accept-Encoding", "gzip").
 		Post(endpoint)
 
 	if err != nil {

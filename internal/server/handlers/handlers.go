@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"encoding/json"
+	"github.com/Osselnet/metrics-collector/internal/server/middleware/gzip"
+	"github.com/Osselnet/metrics-collector/internal/server/middleware/logger"
 	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"log"
+	"os"
 )
 
 type Handler struct {
@@ -11,16 +16,31 @@ type Handler struct {
 	storage *storage.MemStorage
 }
 
-func New(router chi.Router, storage *storage.MemStorage) *Handler {
+func New(router chi.Router, storage *storage.MemStorage, filename string, restore bool) *Handler {
 	h := &Handler{
 		router:  router,
 		storage: storage,
 	}
 
+	if restore {
+		f, err := os.OpenFile(filename, os.O_RDONLY|os.O_CREATE, 0666)
+		if err != nil {
+			log.Println("File open error", err)
+		}
+		defer f.Close()
+
+		decoder := json.NewDecoder(f)
+		err = decoder.Decode(&h.storage)
+		if err != nil {
+			log.Println("Could not restore data", err)
+		}
+	}
+
 	h.router.Use(middleware.RequestID)
 	h.router.Use(middleware.RealIP)
-	h.router.Use(middleware.Logger)
 	h.router.Use(middleware.Recoverer)
+	h.router.Use(logger.LogHandler)
+	h.router.Use(gzip.GzipHandle)
 
 	h.setRoutes()
 
@@ -39,6 +59,9 @@ func (h *Handler) setRoutes() {
 
 	//GET http://<АДРЕС_СЕРВЕРА>/value/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>
 	h.router.Get("/value/{type}/{name}", h.Get)
+
+	h.router.Post("/value/", h.JSONValue)
+	h.router.Post("/update/", h.JSONUpdate)
 }
 
 func (h *Handler) GetRouter() chi.Router {

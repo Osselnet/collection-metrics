@@ -48,7 +48,7 @@ func TestAgent_sendReport(t *testing.T) {
 			},
 		},
 		{
-			name: "Test Invalid Post request counter metric",
+			name: "Test Invalid Post request",
 			req: request{
 				key:   "MCacheSys",
 				value: "ab",
@@ -63,7 +63,7 @@ func TestAgent_sendReport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := handlers.New(chi.NewRouter(), &storage.MemStorage{
 				Metrics: metrics.New(),
-			})
+			}, "", false)
 			server := httptest.NewServer(h.GetRouter())
 			defer server.Close()
 

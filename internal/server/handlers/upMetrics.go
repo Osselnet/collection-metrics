@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"github.com/go-chi/chi/v5"
@@ -9,6 +10,13 @@ import (
 	"sort"
 	"strconv"
 )
+
+type Metrics struct {
+	ID    string   `json:"id"`              // имя метрики
+	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
+	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
+	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+}
 
 func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
@@ -74,7 +82,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) List(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("content-type", "text/HTML")
+	w.Header().Set("content-type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
 	var b bytes.Buffer
@@ -104,4 +112,80 @@ func (h *Handler) List(w http.ResponseWriter, _ *http.Request) {
 	b.WriteString(`</div>`)
 
 	w.Write(b.Bytes())
+}
+
+func (h *Handler) JSONValue(w http.ResponseWriter, r *http.Request) {
+	var m Metrics
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&m)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	switch m.MType {
+	case "counter":
+		counter, err := h.storage.GetCounter(metrics.Name(m.ID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		v := int64(*counter)
+		m.Delta = &v
+	case "gauge":
+		gauge, err := h.storage.GetGauge(metrics.Name(m.ID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		v := float64(*gauge)
+		m.Value = &v
+	}
+
+	resp, err := json.Marshal(m)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp)
+}
+
+func (h *Handler) JSONUpdate(w http.ResponseWriter, r *http.Request) {
+	var m Metrics
+	var buf bytes.Buffer
+
+	_, err := buf.ReadFrom(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = json.Unmarshal(buf.Bytes(), &m)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	switch m.MType {
+	case "counter":
+		if m.Delta == nil {
+			http.Error(w, "metric value should not be empty", http.StatusBadRequest)
+			return
+		}
+		h.storage.Count(metrics.Name(m.ID), metrics.Counter(*m.Delta))
+		w.WriteHeader(http.StatusOK)
+	case "gauge":
+		if m.Value == nil {
+			http.Error(w, "metric value should not be empty", http.StatusBadRequest)
+			return
+		}
+		h.storage.Put(metrics.Name(m.ID), metrics.Gauge(*m.Value))
+		w.WriteHeader(http.StatusOK)
+	default:
+		http.Error(w, "Incorrect metric type", http.StatusBadRequest)
+	}
 }
