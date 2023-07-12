@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"github.com/Osselnet/metrics-collector/internal/server/db"
 	"github.com/Osselnet/metrics-collector/internal/server/middleware/gzip"
 	"github.com/Osselnet/metrics-collector/internal/server/middleware/logger"
 	"github.com/Osselnet/metrics-collector/internal/storage"
@@ -12,14 +13,16 @@ import (
 )
 
 type Handler struct {
-	router  chi.Router
-	storage *storage.MemStorage
+	router    chi.Router
+	storage   *storage.MemStorage
+	dbStorage db.DBStorage
 }
 
-func New(router chi.Router, storage *storage.MemStorage, filename string, restore bool) *Handler {
+func New(router chi.Router, storage *storage.MemStorage, dbStorage db.DBStorage, filename string, restore bool) *Handler {
 	h := &Handler{
-		router:  router,
-		storage: storage,
+		router:    router,
+		storage:   storage,
+		dbStorage: dbStorage,
 	}
 
 	if restore {
@@ -62,6 +65,8 @@ func (h *Handler) setRoutes() {
 
 	h.router.Post("/value/", h.JSONValue)
 	h.router.Post("/update/", h.JSONUpdate)
+
+	h.router.Get("/ping", h.Ping)
 }
 
 func (h *Handler) GetRouter() chi.Router {

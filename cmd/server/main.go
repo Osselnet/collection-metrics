@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/Osselnet/metrics-collector/internal/server/config"
+	"github.com/Osselnet/metrics-collector/internal/server/db"
 	"github.com/Osselnet/metrics-collector/internal/server/handlers"
 	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
@@ -27,6 +28,8 @@ func main() {
 		Metrics: metrics.New(),
 	}
 
+	dbStorage := db.New(cfg.DSN)
+
 	go func() {
 		for {
 			time.Sleep(time.Second * time.Duration(cfg.Interval))
@@ -34,7 +37,7 @@ func main() {
 		}
 	}()
 
-	h := handlers.New(chi.NewRouter(), storage, cfg.Filename, cfg.Restore)
+	h := handlers.New(chi.NewRouter(), storage, dbStorage, cfg.Filename, cfg.Restore)
 	server := http.Server{
 		Addr:    cfg.Address,
 		Handler: h.GetRouter(),
@@ -49,6 +52,13 @@ func main() {
 
 		if err := storage.WriteDataToFile(cfg.Filename); err != nil {
 			log.Printf("Error during saving data to file: %v", err)
+		}
+
+		if dbStorage != nil {
+			err := dbStorage.Shutdown()
+			if err != nil {
+				log.Printf("Database shutdown error: %v", err)
+			}
 		}
 
 		if err := server.Shutdown(context.Background()); err != nil {

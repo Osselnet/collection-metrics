@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"github.com/caarlos0/env"
 )
 
@@ -10,6 +11,7 @@ type Config struct {
 	Interval int    `env:"STORE_INTERVAL"`
 	Filename string `env:"FILE_STORAGE_PATH"`
 	Restore  bool   `env:"RESTORE"`
+	DSN      string `env:"DATABASE_DSN"`
 }
 
 func ParseConfig() (Config, error) {
@@ -27,6 +29,12 @@ func ParseConfig() (Config, error) {
 	flag.BoolVar(&cfg.Restore,
 		"r", true,
 		"Restore metrics value from file")
+	flag.StringVar(&cfg.DSN,
+		"d", fmt.Sprintf(
+			"host=%s port=%d dbname=%s user=%s password=%s target_session_attrs=read-write",
+			"127.0.0.1", 5432, "postgres", "pass", "postgres"),
+		"Connection string in Postgres format")
+
 	flag.Parse()
 
 	err := env.Parse(&cfg)

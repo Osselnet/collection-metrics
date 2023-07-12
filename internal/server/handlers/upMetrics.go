@@ -189,3 +189,17 @@ func (h *Handler) JSONUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Incorrect metric type", http.StatusBadRequest)
 	}
 }
+
+func (h *Handler) Ping(w http.ResponseWriter, _ *http.Request) {
+	if h.dbStorage == nil {
+		http.Error(w, "database not plugged in", http.StatusInternalServerError)
+		return
+	}
+
+	err := h.dbStorage.Ping()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
