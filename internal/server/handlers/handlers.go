@@ -14,15 +14,22 @@ import (
 
 type Handler struct {
 	router    chi.Router
-	storage   *storage.MemStorage
-	dbStorage db.DBStorage
+	Storage   storage.Repositories
+	dbStorage db.DateBaseStorage
 }
 
-func New(router chi.Router, storage *storage.MemStorage, dbStorage db.DBStorage, filename string, restore bool) *Handler {
+func New(router chi.Router, dbStorage db.DateBaseStorage, filename string, restore bool) *Handler {
 	h := &Handler{
 		router:    router,
-		storage:   storage,
 		dbStorage: dbStorage,
+	}
+
+	if h.dbStorage != nil {
+		h.Storage = h.dbStorage
+		log.Println("database storer chosen")
+	} else {
+		log.Println("default storer chosen")
+		h.Storage = storage.New()
 	}
 
 	if restore {
@@ -33,7 +40,7 @@ func New(router chi.Router, storage *storage.MemStorage, dbStorage db.DBStorage,
 		defer f.Close()
 
 		decoder := json.NewDecoder(f)
-		err = decoder.Decode(&h.storage)
+		err = decoder.Decode(&h.Storage)
 		if err != nil {
 			log.Println("Could not restore data", err)
 		}
@@ -51,8 +58,17 @@ func New(router chi.Router, storage *storage.MemStorage, dbStorage db.DBStorage,
 }
 
 func (h *Handler) WithStorage(st *storage.MemStorage) {
-	h.storage = st
+	h.Storage = st
 }
+
+//func (h *Handler) WithDBStorage(db db.DateBaseStorage) Option {
+//	return func(h *Handler) {
+//		if db != nil {
+//			log.Println("database plugin connected")
+//			h.dbStorage = db
+//		}
+//	}
+//}
 
 func (h *Handler) setRoutes() {
 	h.router.Get("/", h.List)

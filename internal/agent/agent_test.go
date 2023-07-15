@@ -2,7 +2,6 @@ package agent
 
 import (
 	"github.com/Osselnet/metrics-collector/internal/server/handlers"
-	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -61,9 +60,7 @@ func TestAgent_sendReport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := handlers.New(chi.NewRouter(), &storage.MemStorage{
-				Metrics: metrics.New(),
-			}, nil, "", false)
+			h := handlers.New(chi.NewRouter(), nil, "", false)
 			server := httptest.NewServer(h.GetRouter())
 			defer server.Close()
 

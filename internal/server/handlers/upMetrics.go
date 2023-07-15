@@ -32,7 +32,7 @@ func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
-		h.storage.Put(metrics.Name(name), gauge)
+		h.Storage.Put(r.Context(), name, gauge)
 	case "counter":
 		var counter metrics.Counter
 		err := counter.FromString(value)
@@ -41,7 +41,7 @@ func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
-		h.storage.Count(metrics.Name(name), counter)
+		h.Storage.Put(r.Context(), name, counter)
 	default:
 		err := fmt.Errorf("not implemented")
 		http.Error(w, err.Error(), http.StatusNotImplemented)
@@ -58,19 +58,19 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	switch metricType {
 	case "gauge":
-		gauge, err := h.storage.GetGauge(metrics.Name(name))
+		gauge, err := h.Storage.Get(r.Context(), name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		val = strconv.FormatFloat(float64(*gauge), 'f', -1, 64)
+		val = strconv.FormatFloat(float64(gauge.(metrics.Gauge)), 'f', -1, 64)
 	case "counter":
-		counter, err := h.storage.GetCounter(metrics.Name(name))
+		counter, err := h.Storage.Get(r.Context(), name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		val = fmt.Sprintf("%d", *counter)
+		val = fmt.Sprintf("%d", counter.(metrics.Counter))
 	default:
 		err := fmt.Errorf("not implemented")
 		http.Error(w, err.Error(), http.StatusNotImplemented)
@@ -81,7 +81,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(val))
 }
 
-func (h *Handler) List(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
@@ -92,8 +92,15 @@ func (h *Handler) List(w http.ResponseWriter, _ *http.Request) {
 		key   string
 		value float64
 	}
-	gauges := make([]gauge, 0, len(h.storage.Gauges))
-	for k, val := range h.storage.Gauges {
+
+	mcs, err := h.Storage.GetMetrics(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	gauges := make([]gauge, 0, metrics.GaugeLen)
+	for k, val := range mcs.Gauges {
 		gauges = append(gauges, gauge{key: string(k), value: float64(val)})
 	}
 	sort.Slice(gauges, func(i, j int) bool { return gauges[i].key < gauges[j].key })
@@ -106,7 +113,7 @@ func (h *Handler) List(w http.ResponseWriter, _ *http.Request) {
 	b.WriteString(`</div>`)
 
 	b.WriteString(`<div><h2>Counters</h2>`)
-	for k, val := range h.storage.Counters {
+	for k, val := range mcs.Counters {
 		b.WriteString(fmt.Sprintf("<div>%s - %d</div>", k, val))
 	}
 	b.WriteString(`</div>`)
@@ -126,20 +133,20 @@ func (h *Handler) JSONValue(w http.ResponseWriter, r *http.Request) {
 
 	switch m.MType {
 	case "counter":
-		counter, err := h.storage.GetCounter(metrics.Name(m.ID))
+		counter, err := h.Storage.Get(r.Context(), m.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		v := int64(*counter)
+		v := int64(counter.(metrics.Counter))
 		m.Delta = &v
 	case "gauge":
-		gauge, err := h.storage.GetGauge(metrics.Name(m.ID))
+		gauge, err := h.Storage.Get(r.Context(), m.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		v := float64(*gauge)
+		v := float64(gauge.(metrics.Gauge))
 		m.Value = &v
 	}
 
@@ -176,14 +183,14 @@ func (h *Handler) JSONUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "metric value should not be empty", http.StatusBadRequest)
 			return
 		}
-		h.storage.Count(metrics.Name(m.ID), metrics.Counter(*m.Delta))
+		h.Storage.Put(r.Context(), m.ID, metrics.Counter(*m.Delta))
 		w.WriteHeader(http.StatusOK)
 	case "gauge":
 		if m.Value == nil {
 			http.Error(w, "metric value should not be empty", http.StatusBadRequest)
 			return
 		}
-		h.storage.Put(metrics.Name(m.ID), metrics.Gauge(*m.Value))
+		h.Storage.Put(r.Context(), m.ID, metrics.Gauge(*m.Value))
 		w.WriteHeader(http.StatusOK)
 	default:
 		http.Error(w, "Incorrect metric type", http.StatusBadRequest)

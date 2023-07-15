@@ -52,9 +52,7 @@ func TestHandler_Post(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := New(chi.NewRouter(), &storage.MemStorage{
-				Metrics: metrics.New(),
-			}, nil, "", false)
+			handler := New(chi.NewRouter(), nil, "", false)
 			r := chi.NewRouter()
 			r.Post("/update/{type}/{name}/{value}", handler.Post)
 
@@ -114,7 +112,7 @@ func TestHandler_Get(t *testing.T) {
 			request:    "/value/gauge/NotFound",
 			want: want{
 				statusCode: http.StatusNotFound,
-				value:      "gauge metric with key 'NotFound' not found\n",
+				value:      "metric not implemented\n",
 			},
 		},
 		{
@@ -138,7 +136,7 @@ func TestHandler_Get(t *testing.T) {
 			request:    "/value/counter/NotFound",
 			want: want{
 				statusCode: http.StatusNotFound,
-				value:      "counter metric with key 'NotFound' not found\n",
+				value:      "metric not implemented\n",
 			},
 		},
 		{
@@ -153,9 +151,7 @@ func TestHandler_Get(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := New(chi.NewRouter(), &storage.MemStorage{
-				Metrics: metrics.New(),
-			}, nil, "", false)
+			handler := New(chi.NewRouter(), nil, "", false)
 			handler.WithStorage(tt.MemStorage)
 			r := chi.NewRouter()
 			r.Get("/value/{type}/{name}", handler.Get)
@@ -191,9 +187,7 @@ func TestHandler_List(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := New(chi.NewRouter(), &storage.MemStorage{
-				Metrics: metrics.New(),
-			}, nil, "", false)
+			handler := New(chi.NewRouter(), nil, "", false)
 			r := chi.NewRouter()
 			r.Get("/", handler.List)
 

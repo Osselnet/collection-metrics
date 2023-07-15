@@ -32,7 +32,7 @@ func ParseConfig() (Config, error) {
 	flag.StringVar(&cfg.DSN,
 		"d", fmt.Sprintf(
 			"host=%s port=%d dbname=%s user=%s password=%s target_session_attrs=read-write",
-			"127.0.0.1", 5432, "postgres", "pass", "postgres"),
+			"127.0.0.1", 5432, "postgres", "postgres", "password"),
 		"Connection string in Postgres format")
 
 	flag.Parse()
