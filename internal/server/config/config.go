@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"github.com/caarlos0/env"
 	"os"
 )
@@ -31,9 +30,7 @@ func ParseConfig() (Config, error) {
 		"r", true,
 		"Restore metrics value from file")
 	flag.StringVar(&config.DSN,
-		"d", fmt.Sprintf(
-			"host=%s port=%d dbname=%s user=%s password=%s target_session_attrs=read-write",
-			"127.0.0.1", 5432, "postgres", "postgres", "password"),
+		"d", "",
 		"Connection string in Postgres format")
 
 	flag.Parse()
