@@ -61,15 +61,6 @@ func (h *Handler) WithStorage(st *storage.MemStorage) {
 	h.Storage = st
 }
 
-//func (h *Handler) WithDBStorage(db db.DateBaseStorage) Option {
-//	return func(h *Handler) {
-//		if db != nil {
-//			log.Println("database plugin connected")
-//			h.dbStorage = db
-//		}
-//	}
-//}
-
 func (h *Handler) setRoutes() {
 	h.router.Get("/", h.List)
 
