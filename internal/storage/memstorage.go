@@ -11,6 +11,7 @@ import (
 type Repositories interface {
 	Put(context.Context, string, interface{}) error
 	Get(context.Context, string) (interface{}, error)
+	PutMetrics(context.Context, metrics.Metrics) error
 	GetMetrics(context.Context) (metrics.Metrics, error)
 }
 
@@ -55,6 +56,20 @@ func (s *MemStorage) Get(_ context.Context, key string) (interface{}, error) {
 	}
 
 	return nil, fmt.Errorf("metric not implemented")
+}
+
+func (s *MemStorage) PutMetrics(_ context.Context, m metrics.Metrics) error {
+	if m.Gauges == nil {
+		m.Gauges = make(map[metrics.Name]metrics.Gauge)
+	}
+
+	if m.Counters == nil {
+		m.Counters = make(map[metrics.Name]metrics.Counter)
+	}
+
+	s.Metrics.Gauges = m.Gauges
+	s.Metrics.Counters = m.Counters
+	return nil
 }
 
 func (s *MemStorage) GetMetrics(_ context.Context) (metrics.Metrics, error) {

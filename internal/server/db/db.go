@@ -36,6 +36,7 @@ const (
 type DateBaseStorage interface {
 	Put(context.Context, string, interface{}) error
 	Get(context.Context, string) (interface{}, error)
+	PutMetrics(context.Context, metrics.Metrics) error
 	GetMetrics(context.Context) (metrics.Metrics, error)
 
 	Ping() error
@@ -175,6 +176,68 @@ func (s *MemStorage) Get(parentCtx context.Context, id string) (interface{}, err
 	}
 
 	return nil, fmt.Errorf("metric not implemented")
+}
+
+func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if m.Gauges != nil {
+		for id, value := range m.Gauges {
+			result, err := tx.ExecContext(ctx, "UPDATE metrics SET value = $2 WHERE id = $1", id, value)
+			if err != nil {
+				return err
+			}
+			count, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if count == 0 {
+				_, err := tx.ExecContext(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, 'gauge', $2)", id, value)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if m.Counters != nil {
+		for id, delta := range m.Counters {
+			mdb := metricsDB{}
+			row := tx.QueryRowContext(ctx, "SELECT id, type, value, delta FROM metrics WHERE id=$1", id)
+			err = row.Scan(&mdb.ID, &mdb.MType, &mdb.Value, &mdb.Delta)
+			if err == sql.ErrNoRows {
+				_, err = tx.ExecContext(ctx, "INSERT INTO metrics (id, type, delta) VALUES ($1, 'counter', $2)", id, delta)
+				if err != nil {
+					return err
+				}
+				continue
+			}
+			if err != nil {
+				return err
+			}
+
+			// запишим увеличенное значение
+			v := metrics.Counter(0)
+			if mdb.Delta.Valid {
+				v = metrics.Counter(mdb.Delta.Int64)
+			}
+			hm := delta + v
+			if _, err = tx.ExecContext(ctx, "UPDATE metrics SET delta = $2 WHERE id = $1", id, hm); err != nil {
+				return err
+			}
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Println("put metrics transaction failed - ", err)
+		return err
+	}
+	return nil
 }
 
 func (s *MemStorage) GetMetrics(parentCtx context.Context) (metrics.Metrics, error) {

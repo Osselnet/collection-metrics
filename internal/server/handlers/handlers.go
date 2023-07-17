@@ -67,6 +67,8 @@ func (h *Handler) setRoutes() {
 	//POST http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
 	h.router.Post("/update/{type}/{name}/{value}", h.Post)
 
+	h.router.Post("/updates/", h.HandleBatchUpdate)
+
 	//GET http://<АДРЕС_СЕРВЕРА>/value/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>
 	h.router.Get("/value/{type}/{name}", h.Get)
 
