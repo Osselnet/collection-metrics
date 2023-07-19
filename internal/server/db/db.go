@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"log"
 	"time"
@@ -39,7 +41,7 @@ type DateBaseStorage interface {
 	PutMetrics(context.Context, metrics.Metrics) error
 	GetMetrics(context.Context) (metrics.Metrics, error)
 
-	Ping() error
+	Ping(parentCtx context.Context) error
 	Shutdown() error
 }
 
@@ -54,6 +56,11 @@ type metricsDB struct {
 	Value sql.NullFloat64
 	Delta sql.NullInt64
 }
+
+type Sender func(context.Context) error
+type QueryContext func(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+type QueryRowContext func(ctx context.Context, query string, args ...any) *sql.Row
+type ExecContext func(ctx context.Context, query string, args ...any) (sql.Result, error)
 
 func New(dsn string) DateBaseStorage {
 	s := &MemStorage{
@@ -76,9 +83,15 @@ func (s *MemStorage) init() error {
 	ctx, cancel := context.WithTimeout(context.Background(), initTimeOut)
 	defer cancel()
 
-	_, err = db.ExecContext(ctx, queryTableValidation)
+	//_, err = db.ExecContext(ctx, queryTableValidation)
+	fn := RetryExecContext(db.ExecContext, 3, 1*time.Second)
+	_, err = fn(ctx, queryTableValidation)
+
 	if err != nil {
-		_, err = db.ExecContext(ctx, queryCreateTable)
+		//_, err = db.ExecContext(ctx, queryCreateTable)
+		fn := RetryExecContext(db.ExecContext, 3, 1*time.Second)
+		_, err = fn(ctx, queryCreateTable)
+
 		if err != nil {
 			return err
 		}
@@ -94,7 +107,10 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 
 	switch m := val.(type) {
 	case metrics.Gauge:
-		result, err := s.db.ExecContext(ctx, queryUpdateGauge, id, m)
+		//result, err := s.db.ExecContext(ctx, queryUpdateGauge, id, m)
+		fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
+		result, err := fn(ctx, queryUpdateGauge, id, m)
+
 		if err != nil {
 			return err
 		}
@@ -104,14 +120,19 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 			return err
 		}
 		if rows == 0 {
-			_, err = s.db.ExecContext(ctx, queryInsertGauge, id, m)
+			//_, err = s.db.ExecContext(ctx, queryInsertGauge, id, m)
+			fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
+			_, err = fn(ctx, queryInsertGauge, id, m)
+
 			if err != nil {
 				return err
 			}
 		}
 	case metrics.Counter:
-		// запишем новое значение счётчика
-		result, err := s.db.ExecContext(ctx, queryGet, id)
+		//result, err := s.db.ExecContext(ctx, queryGet, id)
+		fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
+		result, err := fn(ctx, queryGet, id)
+
 		if err != nil {
 			return err
 		}
@@ -120,7 +141,10 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 			return err
 		}
 		if rows == 0 {
-			_, err = s.db.ExecContext(ctx, queryInsertCounter, id, m)
+			//_, err = s.db.ExecContext(ctx, queryInsertCounter, id, m)
+			fn1 := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
+			_, err = fn1(ctx, queryInsertCounter, id, m)
+
 			if err != nil {
 				return err
 			}
@@ -128,8 +152,11 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 		}
 
 		mdb := metricsDB{}
-		row := s.db.QueryRowContext(ctx, queryGet, id)
+		//row := s.db.QueryRowContext(ctx, queryGet, id)
+		fn3 := RetryQueryRowContext(s.db.QueryRowContext, 3, 1*time.Second)
+		row := fn3(ctx, queryGet, id)
 		err = row.Scan(&mdb.ID, &mdb.MType, &mdb.Value, &mdb.Delta)
+
 		if err != nil {
 			return err
 		}
@@ -140,7 +167,10 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 
 		count := m + metrics.Counter(mdb.Delta.Int64)
 
-		_, err = s.db.ExecContext(ctx, queryUpdateCounter, id, count)
+		//_, err = s.db.ExecContext(ctx, queryUpdateCounter, id, count)
+		fn2 := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
+		_, err = fn2(ctx, queryUpdateCounter, id, count)
+
 		if err != nil {
 			return err
 		}
@@ -155,7 +185,9 @@ func (s *MemStorage) Get(parentCtx context.Context, id string) (interface{}, err
 	defer cancel()
 
 	m := metricsDB{}
-	row := s.db.QueryRowContext(ctx, queryGet, id)
+	//row := s.db.QueryRowContext(ctx, queryGet, id)
+	fn := RetryQueryRowContext(s.db.QueryRowContext, 3, 1*time.Second)
+	row := fn(ctx, queryGet, id)
 	err := row.Scan(&m.ID, &m.MType, &m.Value, &m.Delta)
 	if err != nil {
 		return nil, err
@@ -187,7 +219,10 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 
 	if m.Gauges != nil {
 		for id, value := range m.Gauges {
-			result, err := tx.ExecContext(ctx, "UPDATE metrics SET value = $2 WHERE id = $1", id, value)
+			//result, err := tx.ExecContext(ctx, "UPDATE metrics SET value = $2 WHERE id = $1", id, value)
+			fn := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
+			result, err := fn(ctx, "UPDATE metrics SET value = $2 WHERE id = $1", id, value)
+
 			if err != nil {
 				return err
 			}
@@ -196,7 +231,10 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 				return err
 			}
 			if count == 0 {
-				_, err := tx.ExecContext(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, 'gauge', $2)", id, value)
+				//_, err := tx.ExecContext(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, 'gauge', $2)", id, value)
+				fn := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
+				_, err := fn(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, 'gauge', $2)", id, value)
+
 				if err != nil {
 					return err
 				}
@@ -207,10 +245,16 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 	if m.Counters != nil {
 		for id, delta := range m.Counters {
 			mdb := metricsDB{}
-			row := tx.QueryRowContext(ctx, "SELECT id, type, value, delta FROM metrics WHERE id=$1", id)
-			err = row.Scan(&mdb.ID, &mdb.MType, &mdb.Value, &mdb.Delta)
+			//row := tx.QueryRowContext(ctx, "SELECT id, type, value, delta FROM metrics WHERE id=$1", id)
+			fn := RetryQueryContext(s.db.QueryContext, 3, 1*time.Second)
+			rows, err := fn(ctx, "SELECT id, type, value, delta FROM metrics WHERE id=$1", id)
+
+			err = rows.Scan(&mdb.ID, &mdb.MType, &mdb.Value, &mdb.Delta)
 			if err == sql.ErrNoRows {
-				_, err = tx.ExecContext(ctx, "INSERT INTO metrics (id, type, delta) VALUES ($1, 'counter', $2)", id, delta)
+				//_, err = tx.ExecContext(ctx, "INSERT INTO metrics (id, type, delta) VALUES ($1, 'counter', $2)", id, delta)
+				fn := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
+				_, err := fn(ctx, "INSERT INTO metrics (id, type, delta) VALUES ($1, 'counter', $2)", id, delta)
+
 				if err != nil {
 					return err
 				}
@@ -220,13 +264,14 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 				return err
 			}
 
-			// запишим увеличенное значение
 			v := metrics.Counter(0)
 			if mdb.Delta.Valid {
 				v = metrics.Counter(mdb.Delta.Int64)
 			}
 			hm := delta + v
-			if _, err = tx.ExecContext(ctx, "UPDATE metrics SET delta = $2 WHERE id = $1", id, hm); err != nil {
+			//if _, err = tx.ExecContext(ctx, "UPDATE metrics SET delta = $2 WHERE id = $1", id, hm); err != nil {
+			fn1 := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
+			if _, err := fn1(ctx, "UPDATE metrics SET delta = $2 WHERE id = $1", id, hm); err != nil {
 				return err
 			}
 		}
@@ -246,7 +291,10 @@ func (s *MemStorage) GetMetrics(parentCtx context.Context) (metrics.Metrics, err
 	ctx, cancel := context.WithTimeout(parentCtx, queryTimeOut)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, queryGetMetrics)
+	//rows, err := s.db.QueryContext(ctx, queryGetMetrics)
+	fn := RetryQueryContext(s.db.QueryContext, 3, 1*time.Second)
+	rows, err := fn(ctx, queryGetMetrics)
+
 	if err != nil {
 		return mcs, err
 	}
@@ -283,15 +331,14 @@ func (s *MemStorage) GetMetrics(parentCtx context.Context) (metrics.Metrics, err
 	return mcs, nil
 }
 
-func (s *MemStorage) Ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+func (s *MemStorage) Ping(parentCtx context.Context) error {
+	ctx, cancel := context.WithTimeout(parentCtx, 1*time.Second)
 	defer cancel()
 
-	if err := s.db.PingContext(ctx); err != nil {
-		return err
-	}
+	fn := Retry(s.db.PingContext, 3, 1*time.Second)
+	err := fn(ctx)
 
-	return nil
+	return err
 }
 
 func (s *MemStorage) Shutdown() error {
@@ -302,4 +349,93 @@ func (s *MemStorage) Shutdown() error {
 
 	log.Println("connection to database closed")
 	return nil
+}
+
+func Retry(sender Sender, retries int, delay time.Duration) Sender {
+	return func(ctx context.Context) error {
+		for r := 0; ; r++ {
+			err := sender(ctx)
+			var pgErr *pgconn.PgError
+			if !(errors.As(err, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code)) || r >= retries {
+				return err
+			}
+
+			log.Printf("Function call failed, retrying in %v", delay)
+
+			delay = delay + time.Second*2
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+}
+
+func RetryQueryContext(sender QueryContext, retries int, delay time.Duration) QueryContext {
+	return func(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+		for r := 0; ; r++ {
+			rows, err := sender(ctx, query, args...)
+			var pgErr *pgconn.PgError
+			if !(errors.As(err, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code)) || r >= retries {
+				return rows, err
+			}
+
+			log.Printf("Function call failed, retrying in %v", delay)
+
+			delay = delay + time.Second*2
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return rows, err
+			}
+		}
+	}
+}
+
+func RetryQueryRowContext(sender QueryRowContext, retries int, delay time.Duration) QueryRowContext {
+	return func(ctx context.Context, query string, args ...any) *sql.Row {
+		for r := 0; ; r++ {
+			row := sender(ctx, query, args...)
+			var pgErr *pgconn.PgError
+			if !(errors.As(row.Err(), &pgErr) && pgerrcode.IsConnectionException(pgErr.Code)) || r >= retries {
+				return row
+			}
+
+			log.Printf("Function call failed, retrying in %v", delay)
+
+			delay = delay + time.Second*2
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return row
+			}
+		}
+	}
+}
+
+func RetryExecContext(sender ExecContext, retries int, delay time.Duration) ExecContext {
+	return func(ctx context.Context, query string, args ...any) (sql.Result, error) {
+		for r := 0; ; r++ {
+			result, err := sender(ctx, query, args...)
+
+			var pgErr *pgconn.PgError
+			if !(errors.As(err, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code)) || r >= retries {
+				return result, err
+			}
+
+			log.Printf("Function call failed, retrying in %v", delay)
+
+			delay = delay + time.Second*2
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return result, err
+			}
+		}
+	}
 }

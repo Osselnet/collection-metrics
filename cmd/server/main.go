@@ -34,9 +34,11 @@ func main() {
 	}
 
 	go func() {
-		for {
-			time.Sleep(time.Second * time.Duration(cfg.Interval))
-			h.Storage.(*storage.MemStorage).WriteDataToFile(cfg.Filename)
+		if cfg.DSN == "" && cfg.Filename != "" {
+			for {
+				time.Sleep(time.Second * time.Duration(cfg.Interval))
+				h.Storage.(*storage.MemStorage).WriteDataToFile(cfg.Filename)
+			}
 		}
 	}()
 
@@ -47,8 +49,10 @@ func main() {
 		<-sigint
 		log.Println("Shutting down server")
 
-		if err := h.Storage.(*storage.MemStorage).WriteDataToFile(cfg.Filename); err != nil {
-			log.Printf("Error during saving data to file: %v", err)
+		if cfg.DSN == "" && cfg.Filename != "" {
+			if err := h.Storage.(*storage.MemStorage).WriteDataToFile(cfg.Filename); err != nil {
+				log.Printf("Error during saving data to file: %v", err)
+			}
 		}
 
 		if dbStorage != nil {

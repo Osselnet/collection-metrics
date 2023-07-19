@@ -39,6 +39,8 @@ type Metrics struct {
 	Value metrics.Gauge   `json:"value"` // значение метрики в случае передачи gauge
 }
 
+type Sender func(context.Context) error
+
 var config Config
 
 func New(cfg Config) (*Agent, error) {
@@ -95,13 +97,38 @@ func (a *Agent) RunPool(ctx context.Context) {
 	}
 }
 
+func Retry(sender Sender, retries int, delay time.Duration) Sender {
+	return func(ctx context.Context) error {
+		for r := 0; ; r++ {
+			err := sender(ctx)
+			if err == nil || r >= retries {
+				return err
+			}
+
+			log.Printf("Function call failed, retrying in %v", delay)
+
+			delay = delay + time.Second*2
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+}
+
 func (a *Agent) RunReport(ctx context.Context) {
 	ticker := time.NewTicker(config.ReportInterval)
 	for {
 		select {
 		case <-ticker.C:
-			//	a.sendReport()
-			a.sendReportUpdates(ctx)
+			fn := Retry(a.sendReportUpdates, 3, 1*time.Second)
+			err := fn(ctx)
+			if err != nil {
+				log.Println(err)
+			}
+
 		case <-ctx.Done():
 			log.Println("Regular shutdown of sending metrics")
 			ticker.Stop()
@@ -110,13 +137,13 @@ func (a *Agent) RunReport(ctx context.Context) {
 	}
 }
 
-func (a *Agent) sendReportUpdates(ctx context.Context) {
+func (a *Agent) sendReportUpdates(ctx context.Context) error {
 	hm := make([]Metrics, 0, metrics.GaugeLen+metrics.CounterLen)
 
 	prm, err := a.storage.GetMetrics(ctx)
 	if err != nil {
 		a.handleError(err)
-		return
+		return err
 	}
 
 	for k, v := range prm.Gauges {
@@ -140,17 +167,17 @@ func (a *Agent) sendReportUpdates(ctx context.Context) {
 	}
 
 	if len(hm) == 0 {
-		log.Println("Empty array of metrics, nothing to send")
-		return
+		return fmt.Errorf("%s", "Empty array of metrics, nothing to send")
 	}
 
 	_, err = a.sendUpdates(ctx, hm)
 	if err != nil {
 		a.handleError(err)
-		return
+		return err
 	}
 
 	log.Println("Report sent")
+	return nil
 }
 
 func (a *Agent) sendUpdates(ctx context.Context, hm []Metrics) (*resty.Response, error) {

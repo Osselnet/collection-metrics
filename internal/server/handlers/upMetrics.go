@@ -197,13 +197,13 @@ func (h *Handler) JSONUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) Ping(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) Ping(w http.ResponseWriter, r *http.Request) {
 	if h.dbStorage == nil {
 		http.Error(w, "database not plugged in", http.StatusInternalServerError)
 		return
 	}
 
-	err := h.dbStorage.Ping()
+	err := h.dbStorage.Ping(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
