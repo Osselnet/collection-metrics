@@ -83,12 +83,10 @@ func (s *MemStorage) init() error {
 	ctx, cancel := context.WithTimeout(context.Background(), initTimeOut)
 	defer cancel()
 
-	//_, err = db.ExecContext(ctx, queryTableValidation)
 	fn := RetryExecContext(db.ExecContext, 3, 1*time.Second)
 	_, err = fn(ctx, queryTableValidation)
 
 	if err != nil {
-		//_, err = db.ExecContext(ctx, queryCreateTable)
 		fn := RetryExecContext(db.ExecContext, 3, 1*time.Second)
 		_, err = fn(ctx, queryCreateTable)
 
@@ -107,7 +105,6 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 
 	switch m := val.(type) {
 	case metrics.Gauge:
-		//result, err := s.db.ExecContext(ctx, queryUpdateGauge, id, m)
 		fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
 		result, err := fn(ctx, queryUpdateGauge, id, m)
 
@@ -120,7 +117,6 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 			return err
 		}
 		if rows == 0 {
-			//_, err = s.db.ExecContext(ctx, queryInsertGauge, id, m)
 			fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
 			_, err = fn(ctx, queryInsertGauge, id, m)
 
@@ -129,7 +125,6 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 			}
 		}
 	case metrics.Counter:
-		//result, err := s.db.ExecContext(ctx, queryGet, id)
 		fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
 		result, err := fn(ctx, queryGet, id)
 
@@ -141,7 +136,6 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 			return err
 		}
 		if rows == 0 {
-			//_, err = s.db.ExecContext(ctx, queryInsertCounter, id, m)
 			fn1 := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
 			_, err = fn1(ctx, queryInsertCounter, id, m)
 
@@ -152,7 +146,6 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 		}
 
 		mdb := metricsDB{}
-		//row := s.db.QueryRowContext(ctx, queryGet, id)
 		fn3 := RetryQueryRowContext(s.db.QueryRowContext, 3, 1*time.Second)
 		row := fn3(ctx, queryGet, id)
 		err = row.Scan(&mdb.ID, &mdb.MType, &mdb.Value, &mdb.Delta)
@@ -167,7 +160,6 @@ func (s *MemStorage) Put(parentCtx context.Context, id string, val interface{}) 
 
 		count := m + metrics.Counter(mdb.Delta.Int64)
 
-		//_, err = s.db.ExecContext(ctx, queryUpdateCounter, id, count)
 		fn2 := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
 		_, err = fn2(ctx, queryUpdateCounter, id, count)
 
@@ -185,7 +177,6 @@ func (s *MemStorage) Get(parentCtx context.Context, id string) (interface{}, err
 	defer cancel()
 
 	m := metricsDB{}
-	//row := s.db.QueryRowContext(ctx, queryGet, id)
 	fn := RetryQueryRowContext(s.db.QueryRowContext, 3, 1*time.Second)
 	row := fn(ctx, queryGet, id)
 	err := row.Scan(&m.ID, &m.MType, &m.Value, &m.Delta)
@@ -219,7 +210,6 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 
 	if m.Gauges != nil {
 		for id, value := range m.Gauges {
-			//result, err := tx.ExecContext(ctx, "UPDATE metrics SET value = $2 WHERE id = $1", id, value)
 			fn := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
 			result, err := fn(ctx, "UPDATE metrics SET value = $2 WHERE id = $1", id, value)
 
@@ -231,7 +221,6 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 				return err
 			}
 			if count == 0 {
-				//_, err := tx.ExecContext(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, 'gauge', $2)", id, value)
 				fn := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
 				_, err := fn(ctx, "INSERT INTO metrics (id, type, value) VALUES ($1, 'gauge', $2)", id, value)
 
@@ -245,13 +234,13 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 	if m.Counters != nil {
 		for id, delta := range m.Counters {
 			mdb := metricsDB{}
-			//row := tx.QueryRowContext(ctx, "SELECT id, type, value, delta FROM metrics WHERE id=$1", id)
 			fn := RetryQueryContext(s.db.QueryContext, 3, 1*time.Second)
 			rows, err := fn(ctx, "SELECT id, type, value, delta FROM metrics WHERE id=$1", id)
-
+			if err != nil {
+				return err
+			}
 			err = rows.Scan(&mdb.ID, &mdb.MType, &mdb.Value, &mdb.Delta)
 			if err == sql.ErrNoRows {
-				//_, err = tx.ExecContext(ctx, "INSERT INTO metrics (id, type, delta) VALUES ($1, 'counter', $2)", id, delta)
 				fn := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
 				_, err := fn(ctx, "INSERT INTO metrics (id, type, delta) VALUES ($1, 'counter', $2)", id, delta)
 
@@ -269,7 +258,6 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 				v = metrics.Counter(mdb.Delta.Int64)
 			}
 			hm := delta + v
-			//if _, err = tx.ExecContext(ctx, "UPDATE metrics SET delta = $2 WHERE id = $1", id, hm); err != nil {
 			fn1 := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
 			if _, err := fn1(ctx, "UPDATE metrics SET delta = $2 WHERE id = $1", id, hm); err != nil {
 				return err
@@ -291,7 +279,6 @@ func (s *MemStorage) GetMetrics(parentCtx context.Context) (metrics.Metrics, err
 	ctx, cancel := context.WithTimeout(parentCtx, queryTimeOut)
 	defer cancel()
 
-	//rows, err := s.db.QueryContext(ctx, queryGetMetrics)
 	fn := RetryQueryContext(s.db.QueryContext, 3, 1*time.Second)
 	rows, err := fn(ctx, queryGetMetrics)
 
