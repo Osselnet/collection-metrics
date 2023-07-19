@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"github.com/caarlos0/env"
+	"os"
 )
 
 type Config struct {
@@ -10,29 +11,51 @@ type Config struct {
 	Interval int    `env:"STORE_INTERVAL"`
 	Filename string `env:"FILE_STORAGE_PATH"`
 	Restore  bool   `env:"RESTORE"`
+	DSN      string `env:"DATABASE_DSN"`
 }
 
 func ParseConfig() (Config, error) {
-	var cfg Config
+	config := new(Config)
 
-	flag.StringVar(&cfg.Address,
+	flag.StringVar(&config.Address,
 		"a", "localhost:8080",
 		"Add addres and port in format <address>:<port>")
-	flag.IntVar(&cfg.Interval,
+	flag.IntVar(&config.Interval,
 		"i", 300,
 		"Saving metrics to file interval")
-	flag.StringVar(&cfg.Filename,
+	flag.StringVar(&config.Filename,
 		"f", "/tmp/metrics-db.json",
 		"File path")
-	flag.BoolVar(&cfg.Restore,
+	flag.BoolVar(&config.Restore,
 		"r", true,
 		"Restore metrics value from file")
+	flag.StringVar(&config.DSN,
+		"d", "",
+		"Connection string in Postgres format")
+
 	flag.Parse()
 
-	err := env.Parse(&cfg)
+	envConfig := Config{}
+	err := env.Parse(&envConfig)
 	if err != nil {
-		return cfg, err
+		return *config, err
 	}
 
-	return cfg, nil
+	if _, ok := os.LookupEnv("ADDRESS"); ok {
+		config.Address = envConfig.Address
+	}
+	if _, ok := os.LookupEnv("STORE_INTERVAL"); ok {
+		config.Interval = envConfig.Interval
+	}
+	if _, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
+		config.Filename = envConfig.Filename
+	}
+	if _, ok := os.LookupEnv("RESTORE"); ok {
+		config.Restore = envConfig.Restore
+	}
+	if _, ok := os.LookupEnv("DATABASE_DSN"); ok {
+		config.DSN = envConfig.DSN
+	}
+
+	return *config, nil
 }

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
@@ -8,44 +9,78 @@ import (
 )
 
 type Repositories interface {
-	Put(metrics.Name, metrics.Gauge)
-	Count(metrics.Name, metrics.Counter)
+	Put(context.Context, string, interface{}) error
+	Get(context.Context, string) (interface{}, error)
+	PutMetrics(context.Context, metrics.Metrics) error
+	GetMetrics(context.Context) (metrics.Metrics, error)
 }
 
 type MemStorage struct {
 	*metrics.Metrics
 }
 
-func (s *MemStorage) Put(key metrics.Name, val metrics.Gauge) {
-	s.Gauges[key] = val
+func New() *MemStorage {
+	return &MemStorage{
+		Metrics: metrics.New(),
+	}
 }
 
-func (s *MemStorage) Count(key metrics.Name, val metrics.Counter) {
-	_, ok := s.Counters[key]
-	if !ok {
-		s.Counters[key] = val
-		return
+func (s *MemStorage) Put(_ context.Context, key string, val interface{}) error {
+	switch m := val.(type) {
+	case metrics.Gauge:
+		s.Gauges[metrics.Name(key)] = m
+	case metrics.Counter:
+		_, ok := s.Counters[metrics.Name(key)]
+		if !ok {
+			s.Counters[metrics.Name(key)] = m
+		} else {
+			s.Counters[metrics.Name(key)] += m
+		}
+	default:
+		return fmt.Errorf("metric not implemented")
 	}
 
-	s.Counters[key] += val
+	return nil
 }
 
-func (s *MemStorage) GetGauge(key metrics.Name) (*metrics.Gauge, error) {
-	gauge, ok := s.Gauges[key]
-	if !ok {
-		return &gauge, fmt.Errorf("gauge metric with key '%s' not found", key)
+func (s *MemStorage) Get(_ context.Context, key string) (interface{}, error) {
+
+	delta, ok := s.Counters[metrics.Name(key)]
+	if ok {
+		return delta, nil
 	}
 
-	return &gauge, nil
+	value, ok := s.Gauges[metrics.Name(key)]
+	if ok {
+		return value, nil
+	}
+
+	return nil, fmt.Errorf("metric not implemented")
 }
 
-func (s *MemStorage) GetCounter(key metrics.Name) (*metrics.Counter, error) {
-	counter, ok := s.Counters[key]
-	if !ok {
-		return &counter, fmt.Errorf("counter metric with key '%s' not found", key)
+func (s *MemStorage) PutMetrics(_ context.Context, m metrics.Metrics) error {
+	if m.Gauges == nil {
+		m.Gauges = make(map[metrics.Name]metrics.Gauge)
 	}
 
-	return &counter, nil
+	if m.Counters == nil {
+		m.Counters = make(map[metrics.Name]metrics.Counter)
+	}
+
+	s.Metrics.Gauges = m.Gauges
+	s.Metrics.Counters = m.Counters
+	return nil
+}
+
+func (s *MemStorage) GetMetrics(_ context.Context) (metrics.Metrics, error) {
+	gauges := s.Metrics.Gauges
+
+	counters := s.Metrics.Counters
+
+	return metrics.Metrics{
+		Gauges:   gauges,
+		Counters: counters,
+	}, nil
 }
 
 func (s *MemStorage) WriteDataToFile(filename string) error {

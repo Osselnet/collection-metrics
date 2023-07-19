@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"github.com/Osselnet/metrics-collector/internal/server/db"
 	"github.com/Osselnet/metrics-collector/internal/server/middleware/gzip"
 	"github.com/Osselnet/metrics-collector/internal/server/middleware/logger"
 	"github.com/Osselnet/metrics-collector/internal/storage"
@@ -12,14 +13,23 @@ import (
 )
 
 type Handler struct {
-	router  chi.Router
-	storage *storage.MemStorage
+	router    chi.Router
+	Storage   storage.Repositories
+	dbStorage db.DateBaseStorage
 }
 
-func New(router chi.Router, storage *storage.MemStorage, filename string, restore bool) *Handler {
+func New(router chi.Router, dbStorage db.DateBaseStorage, filename string, restore bool) *Handler {
 	h := &Handler{
-		router:  router,
-		storage: storage,
+		router:    router,
+		dbStorage: dbStorage,
+	}
+
+	if h.dbStorage != nil {
+		h.Storage = h.dbStorage
+		log.Println("database storer chosen")
+	} else {
+		log.Println("default storer chosen")
+		h.Storage = storage.New()
 	}
 
 	if restore {
@@ -30,7 +40,7 @@ func New(router chi.Router, storage *storage.MemStorage, filename string, restor
 		defer f.Close()
 
 		decoder := json.NewDecoder(f)
-		err = decoder.Decode(&h.storage)
+		err = decoder.Decode(&h.Storage)
 		if err != nil {
 			log.Println("Could not restore data", err)
 		}
@@ -48,7 +58,7 @@ func New(router chi.Router, storage *storage.MemStorage, filename string, restor
 }
 
 func (h *Handler) WithStorage(st *storage.MemStorage) {
-	h.storage = st
+	h.Storage = st
 }
 
 func (h *Handler) setRoutes() {
@@ -57,11 +67,15 @@ func (h *Handler) setRoutes() {
 	//POST http://<АДРЕС_СЕРВЕРА>/update/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>/<ЗНАЧЕНИЕ_МЕТРИКИ>
 	h.router.Post("/update/{type}/{name}/{value}", h.Post)
 
+	h.router.Post("/updates/", h.HandleBatchUpdate)
+
 	//GET http://<АДРЕС_СЕРВЕРА>/value/<ТИП_МЕТРИКИ>/<ИМЯ_МЕТРИКИ>
 	h.router.Get("/value/{type}/{name}", h.Get)
 
 	h.router.Post("/value/", h.JSONValue)
 	h.router.Post("/update/", h.JSONUpdate)
+
+	h.router.Get("/ping", h.Ping)
 }
 
 func (h *Handler) GetRouter() chi.Router {
