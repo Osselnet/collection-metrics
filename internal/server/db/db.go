@@ -236,7 +236,8 @@ func (s *MemStorage) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 			mdb := metricsDB{}
 			fn := RetryQueryContext(s.db.QueryContext, 3, 1*time.Second)
 			rows, err := fn(ctx, "SELECT id, type, value, delta FROM metrics WHERE id=$1", id)
-			if err != nil {
+
+			if err != nil || rows.Err() != nil {
 				return err
 			}
 			err = rows.Scan(&mdb.ID, &mdb.MType, &mdb.Value, &mdb.Delta)
