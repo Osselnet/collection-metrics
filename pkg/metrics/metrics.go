@@ -5,9 +5,6 @@ import (
 )
 
 const (
-	TypeGauge   = "gauge"
-	TypeCounter = "counter"
-
 	GaugeLen   = 28
 	CounterLen = 1
 
