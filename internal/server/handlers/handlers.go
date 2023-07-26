@@ -16,12 +16,14 @@ type Handler struct {
 	router    chi.Router
 	Storage   storage.Repositories
 	dbStorage db.DateBaseStorage
+	key       string
 }
 
-func New(router chi.Router, dbStorage db.DateBaseStorage, filename string, restore bool) *Handler {
+func New(router chi.Router, dbStorage db.DateBaseStorage, filename string, restore bool, key string) *Handler {
 	h := &Handler{
 		router:    router,
 		dbStorage: dbStorage,
+		key:       key,
 	}
 
 	if h.dbStorage != nil {

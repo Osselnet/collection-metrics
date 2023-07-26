@@ -1,6 +1,10 @@
 package metrics
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"strconv"
 )
 
@@ -82,4 +86,18 @@ func (c *Counter) FromString(str string) error {
 	*c = counter
 
 	return nil
+}
+
+func GaugeHash(key, id string, value float64) string {
+	msg := fmt.Sprintf("%s:gauge:%f", id, value)
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write([]byte(msg))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func CounterHash(key, id string, delta int64) string {
+	msg := fmt.Sprintf("%s:counter:%d", id, delta)
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write([]byte(msg))
+	return hex.EncodeToString(h.Sum(nil))
 }

@@ -18,6 +18,7 @@ func main() {
 		PollInterval:   time.Duration(config.PollInterval) * time.Second,
 		ReportInterval: time.Duration(config.ReportInterval) * time.Second,
 		Address:        config.Addr,
+		Key:            config.Key,
 	}
 
 	agent, err := agent.New(cfg)

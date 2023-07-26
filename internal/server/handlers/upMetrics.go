@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"github.com/go-chi/chi/v5"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -16,6 +17,7 @@ type Metrics struct {
 	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
 	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
 	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+	Hash  string   `json:"hash,omitempty"`  // значение хеш-функции
 }
 
 func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +142,9 @@ func (h *Handler) JSONValue(w http.ResponseWriter, r *http.Request) {
 		}
 		v := int64(counter.(metrics.Counter))
 		m.Delta = &v
+		if h.key != "" {
+			m.Hash = metrics.CounterHash(h.key, m.ID, *m.Delta)
+		}
 	case "gauge":
 		gauge, err := h.Storage.Get(r.Context(), m.ID)
 		if err != nil {
@@ -148,6 +153,9 @@ func (h *Handler) JSONValue(w http.ResponseWriter, r *http.Request) {
 		}
 		v := float64(gauge.(metrics.Gauge))
 		m.Value = &v
+		if h.key != "" {
+			m.Hash = metrics.GaugeHash(h.key, m.ID, *m.Value)
+		}
 	}
 
 	resp, err := json.Marshal(m)
@@ -183,12 +191,26 @@ func (h *Handler) JSONUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "metric value should not be empty", http.StatusBadRequest)
 			return
 		}
+		if h.key != "" && m.Hash != "" {
+			if metrics.CounterHash(h.key, m.ID, *m.Delta) != m.Hash {
+				err = fmt.Errorf("hash check failed for counter metric")
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
 		h.Storage.Put(r.Context(), m.ID, metrics.Counter(*m.Delta))
 		w.WriteHeader(http.StatusOK)
 	case metrics.TypeGauge:
 		if m.Value == nil {
 			http.Error(w, "metric value should not be empty", http.StatusBadRequest)
 			return
+		}
+		if h.key != "" && m.Hash != "" {
+			if metrics.GaugeHash(h.key, m.ID, *m.Value) != m.Hash {
+				err = fmt.Errorf("hash check failed for gauge metric")
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 		h.Storage.Put(r.Context(), m.ID, metrics.Gauge(*m.Value))
 		w.WriteHeader(http.StatusOK)
@@ -245,4 +267,38 @@ func (h *Handler) HandleBatchUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) hashCheck(m *Metrics) error {
+	if h.key == "" {
+		return nil
+	}
+	switch m.MType {
+	case "gauge":
+		if m.Value == nil {
+			m.Value = new(float64)
+		}
+
+		mac1 := m.Hash
+		mac2 := metrics.GaugeHash(h.key, m.ID, *m.Value)
+		if mac1 != mac2 {
+			log.Printf(":: mac1 - %s\n", mac1)
+			log.Printf(":: mac2 - %s\n", mac2)
+			return fmt.Errorf("hash check failed for gauge metric")
+		}
+	case "counter":
+		if m.Delta == nil {
+			m.Delta = new(int64)
+		}
+
+		mac1 := m.Hash
+		mac2 := metrics.CounterHash(h.key, m.ID, *m.Delta)
+		if mac1 != mac2 {
+			return fmt.Errorf("hash check failed for counter metric")
+		}
+	default:
+		err := fmt.Errorf("not implemented")
+		return err
+	}
+	return nil
 }
