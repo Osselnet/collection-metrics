@@ -21,7 +21,7 @@ const (
 )
 
 func New(dsn string) DateBaseStorage {
-	s := &MemStorageDb{}
+	s := &MemStorageDB{}
 	err := s.init(dsn)
 	if err != nil {
 		log.Printf("Database initialization error: %v", err)
@@ -29,7 +29,7 @@ func New(dsn string) DateBaseStorage {
 	return s
 }
 
-func (s *MemStorageDb) init(dsn string) error {
+func (s *MemStorageDB) init(dsn string) error {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return err

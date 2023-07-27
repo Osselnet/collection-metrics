@@ -35,7 +35,7 @@ type DateBaseStorage interface {
 	Shutdown() error
 }
 
-type MemStorageDb struct {
+type MemStorageDB struct {
 	db *sql.DB
 }
 
@@ -51,7 +51,7 @@ type QueryContext func(ctx context.Context, query string, args ...any) (*sql.Row
 type QueryRowContext func(ctx context.Context, query string, args ...any) *sql.Row
 type ExecContext func(ctx context.Context, query string, args ...any) (sql.Result, error)
 
-func (s *MemStorageDb) Put(parentCtx context.Context, id string, val interface{}) error {
+func (s *MemStorageDB) Put(parentCtx context.Context, id string, val interface{}) error {
 	ctx, cancel := context.WithTimeout(parentCtx, queryTimeOut)
 	defer cancel()
 
@@ -72,7 +72,7 @@ func (s *MemStorageDb) Put(parentCtx context.Context, id string, val interface{}
 	return nil
 }
 
-func (s *MemStorageDb) putGauge(ctx context.Context, id string, val metrics.Gauge) error {
+func (s *MemStorageDB) putGauge(ctx context.Context, id string, val metrics.Gauge) error {
 	fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
 	result, err := fn(ctx, queryUpdateGauge, id, val)
 
@@ -95,7 +95,7 @@ func (s *MemStorageDb) putGauge(ctx context.Context, id string, val metrics.Gaug
 	return nil
 }
 
-func (s *MemStorageDb) putCounter(ctx context.Context, id string, val metrics.Counter) error {
+func (s *MemStorageDB) putCounter(ctx context.Context, id string, val metrics.Counter) error {
 	fn := RetryExecContext(s.db.ExecContext, 3, 1*time.Second)
 	result, err := fn(ctx, queryGet, id)
 
@@ -140,11 +140,11 @@ func (s *MemStorageDb) putCounter(ctx context.Context, id string, val metrics.Co
 	return nil
 }
 
-func (s *MemStorageDb) Get(parentCtx context.Context, id string) (interface{}, error) {
+func (s *MemStorageDB) Get(parentCtx context.Context, id string) (interface{}, error) {
 	ctx, cancel := context.WithTimeout(parentCtx, queryTimeOut)
 	defer cancel()
 
-	m, err := s.getId(ctx, id)
+	m, err := s.getID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func (s *MemStorageDb) Get(parentCtx context.Context, id string) (interface{}, e
 	return nil, fmt.Errorf("metric not implemented")
 }
 
-func (s *MemStorageDb) getId(ctx context.Context, id string) (metricsDB, error) {
+func (s *MemStorageDB) getID(ctx context.Context, id string) (metricsDB, error) {
 	m := metricsDB{}
 	fn := RetryQueryRowContext(s.db.QueryRowContext, 3, 1*time.Second)
 	row := fn(ctx, queryGet, id)
@@ -174,7 +174,7 @@ func (s *MemStorageDb) getId(ctx context.Context, id string) (metricsDB, error) 
 	return m, err
 }
 
-func (s *MemStorageDb) PutMetrics(ctx context.Context, m metrics.Metrics) error {
+func (s *MemStorageDB) PutMetrics(ctx context.Context, m metrics.Metrics) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -203,7 +203,7 @@ func (s *MemStorageDb) PutMetrics(ctx context.Context, m metrics.Metrics) error 
 	return nil
 }
 
-func (s *MemStorageDb) putGauges(ctx context.Context, tx *sql.Tx, m metrics.Metrics) error {
+func (s *MemStorageDB) putGauges(ctx context.Context, tx *sql.Tx, m metrics.Metrics) error {
 	for id, value := range m.Gauges {
 		fn := RetryExecContext(tx.ExecContext, 3, 1*time.Second)
 		result, err := fn(ctx, queryUpdateGauge, id, value)
@@ -227,7 +227,7 @@ func (s *MemStorageDb) putGauges(ctx context.Context, tx *sql.Tx, m metrics.Metr
 	return nil
 }
 
-func (s *MemStorageDb) putCounters(ctx context.Context, tx *sql.Tx, m metrics.Metrics) error {
+func (s *MemStorageDB) putCounters(ctx context.Context, tx *sql.Tx, m metrics.Metrics) error {
 	for id, delta := range m.Counters {
 		mdb := metricsDB{}
 		fn := RetryQueryContext(s.db.QueryContext, 3, 1*time.Second)
@@ -262,7 +262,7 @@ func (s *MemStorageDb) putCounters(ctx context.Context, tx *sql.Tx, m metrics.Me
 	return nil
 }
 
-func (s *MemStorageDb) GetMetrics(parentCtx context.Context) (metrics.Metrics, error) {
+func (s *MemStorageDB) GetMetrics(parentCtx context.Context) (metrics.Metrics, error) {
 	mcs := *metrics.New()
 	rows, err := s.queryMetrics(parentCtx)
 	if err != nil {
@@ -301,7 +301,7 @@ func (s *MemStorageDb) GetMetrics(parentCtx context.Context) (metrics.Metrics, e
 	return mcs, nil
 }
 
-func (s *MemStorageDb) queryMetrics(parentCtx context.Context) (*sql.Rows, error) {
+func (s *MemStorageDB) queryMetrics(parentCtx context.Context) (*sql.Rows, error) {
 	ctx, cancel := context.WithTimeout(parentCtx, queryTimeOut)
 	defer cancel()
 
@@ -309,7 +309,7 @@ func (s *MemStorageDb) queryMetrics(parentCtx context.Context) (*sql.Rows, error
 	return fn(ctx, queryGetMetrics)
 }
 
-func (s *MemStorageDb) Ping(parentCtx context.Context) error {
+func (s *MemStorageDB) Ping(parentCtx context.Context) error {
 	ctx, cancel := context.WithTimeout(parentCtx, 1*time.Second)
 	defer cancel()
 
@@ -319,7 +319,7 @@ func (s *MemStorageDb) Ping(parentCtx context.Context) error {
 	return err
 }
 
-func (s *MemStorageDb) Shutdown() error {
+func (s *MemStorageDB) Shutdown() error {
 	err := s.db.Close()
 	if err != nil {
 		return err
