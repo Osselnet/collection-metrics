@@ -24,6 +24,7 @@ type Config struct {
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 	Address        string
+	Key            string
 }
 
 type Agent struct {
@@ -33,10 +34,11 @@ type Agent struct {
 }
 
 type Metrics struct {
-	ID    string          `json:"id"`    // имя метрики
-	MType string          `json:"type"`  // параметр, принимающий значение gauge или counter
-	Delta metrics.Counter `json:"delta"` // значение метрики в случае передачи counter
-	Value metrics.Gauge   `json:"value"` // значение метрики в случае передачи gauge
+	ID    string          `json:"id"`             // имя метрики
+	MType string          `json:"type"`           // параметр, принимающий значение gauge или counter
+	Delta metrics.Counter `json:"delta"`          // значение метрики в случае передачи counter
+	Value metrics.Gauge   `json:"value"`          // значение метрики в случае передачи gauge
+	Hash  string          `json:"hash,omitempty"` // значение хеш-функции
 }
 
 type Sender func(context.Context) error
@@ -139,6 +141,7 @@ func (a *Agent) RunReport(ctx context.Context) {
 
 func (a *Agent) sendReportUpdates(ctx context.Context) error {
 	hm := make([]Metrics, 0, metrics.GaugeLen+metrics.CounterLen)
+	var hash = ""
 
 	prm, err := a.storage.GetMetrics(ctx)
 	if err != nil {
@@ -149,20 +152,29 @@ func (a *Agent) sendReportUpdates(ctx context.Context) error {
 	for k, v := range prm.Gauges {
 		value := float64(v)
 
+		if config.Key != "" {
+			hash = metrics.GaugeHash(config.Key, string(k), value)
+		}
+
 		hm = append(hm, Metrics{
 			ID:    string(k),
 			MType: metrics.TypeGauge,
 			Value: metrics.Gauge(value),
+			Hash:  hash,
 		})
 	}
 
 	for k, v := range prm.Counters {
 		delta := int64(v)
 
+		if config.Key != "" {
+			hash = metrics.CounterHash(config.Key, string(k), delta)
+		}
 		hm = append(hm, Metrics{
 			ID:    string(k),
 			MType: metrics.TypeCounter,
 			Delta: metrics.Counter(delta),
+			Hash:  hash,
 		})
 	}
 
