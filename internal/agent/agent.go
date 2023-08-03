@@ -9,12 +9,16 @@ import (
 	"github.com/Osselnet/metrics-collector/internal/storage"
 	"github.com/Osselnet/metrics-collector/pkg/metrics"
 	"github.com/go-resty/resty/v2"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -25,6 +29,7 @@ type Config struct {
 	ReportInterval time.Duration
 	Address        string
 	Key            string
+	RateLimit      int
 }
 
 type Agent struct {
@@ -41,7 +46,7 @@ type Metrics struct {
 	Hash  string          `json:"hash,omitempty"` // значение хеш-функции
 }
 
-type Sender func(context.Context) error
+type Sender func(context.Context, <-chan metrics.Metrics) error
 
 var config Config
 
@@ -75,8 +80,12 @@ func (a *Agent) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go a.RunPool(ctx)
-	go a.RunReport(ctx)
+	metricsCh := make(chan metrics.Metrics, config.RateLimit)
+	defer close(metricsCh)
+
+	go a.RunPool(ctx, metricsCh)
+	go a.GopsutilTicker(ctx, metricsCh)
+	go a.RunReport(ctx, metricsCh)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
@@ -85,12 +94,12 @@ func (a *Agent) Run() {
 	log.Println("Agent work completed")
 }
 
-func (a *Agent) RunPool(ctx context.Context) {
+func (a *Agent) RunPool(ctx context.Context, metricsCh chan<- metrics.Metrics) {
 	ticker := time.NewTicker(config.PollInterval)
 	for {
 		select {
 		case <-ticker.C:
-			a.Update(ctx)
+			a.Update(metricsCh)
 		case <-ctx.Done():
 			log.Println("Regular completion of the metrics update")
 			ticker.Stop()
@@ -100,9 +109,9 @@ func (a *Agent) RunPool(ctx context.Context) {
 }
 
 func Retry(sender Sender, retries int, delay time.Duration) Sender {
-	return func(ctx context.Context) error {
+	return func(ctx context.Context, metricsCh <-chan metrics.Metrics) error {
 		for r := 0; ; r++ {
-			err := sender(ctx)
+			err := sender(ctx, metricsCh)
 			if err == nil || r >= retries {
 				return err
 			}
@@ -120,13 +129,13 @@ func Retry(sender Sender, retries int, delay time.Duration) Sender {
 	}
 }
 
-func (a *Agent) RunReport(ctx context.Context) {
+func (a *Agent) RunReport(ctx context.Context, metricsCh <-chan metrics.Metrics) {
 	ticker := time.NewTicker(config.ReportInterval)
 	for {
 		select {
 		case <-ticker.C:
 			fn := Retry(a.sendReportUpdates, 3, 1*time.Second)
-			err := fn(ctx)
+			err := fn(ctx, metricsCh)
 			if err != nil {
 				log.Println(err)
 			}
@@ -139,15 +148,25 @@ func (a *Agent) RunReport(ctx context.Context) {
 	}
 }
 
-func (a *Agent) sendReportUpdates(ctx context.Context) error {
+func (a *Agent) GopsutilTicker(ctx context.Context, metricsCh chan<- metrics.Metrics) {
+	ticker := time.NewTicker(config.PollInterval)
+	for {
+		select {
+		case <-ticker.C:
+			a.gopsutilUpdate(metricsCh)
+		case <-ctx.Done():
+			log.Println("Regular completion of the metrics update")
+			ticker.Stop()
+			return
+		}
+	}
+}
+
+func (a *Agent) sendReportUpdates(ctx context.Context, metricsCh <-chan metrics.Metrics) error {
 	hm := make([]Metrics, 0, metrics.GaugeLen+metrics.CounterLen)
 	var hash = ""
 
-	prm, err := a.storage.GetMetrics(ctx)
-	if err != nil {
-		a.handleError(err)
-		return err
-	}
+	prm := <-metricsCh
 
 	for k, v := range prm.Gauges {
 		value := float64(v)
@@ -182,7 +201,7 @@ func (a *Agent) sendReportUpdates(ctx context.Context) error {
 		return fmt.Errorf("%s", "Empty array of metrics, nothing to send")
 	}
 
-	_, err = a.sendUpdates(ctx, hm)
+	_, err := a.sendUpdates(ctx, hm)
 	if err != nil {
 		a.handleError(err)
 		return err
@@ -287,13 +306,15 @@ func (a *Agent) handleError(err error) {
 	log.Println("Error -", err)
 }
 
-func (a *Agent) Update(ctx context.Context) {
+func (a *Agent) Update(metricsCh chan<- metrics.Metrics) {
+	var mu sync.RWMutex
 	ms := &runtime.MemStats{}
-	runtime.ReadMemStats(ms)
 
 	prm := metrics.New()
 	gauges := make(map[metrics.Name]metrics.Gauge, metrics.GaugeLen)
+	mu.Lock()
 
+	runtime.ReadMemStats(ms)
 	gauges[metrics.Alloc] = metrics.Gauge(ms.Alloc)
 	gauges[metrics.BuckHashSys] = metrics.Gauge(ms.BuckHashSys)
 	gauges[metrics.Frees] = metrics.Gauge(ms.Frees)
@@ -324,13 +345,45 @@ func (a *Agent) Update(ctx context.Context) {
 	gauges[metrics.RandomValue] = metrics.Gauge(rand.Float64())
 
 	prm.Gauges = gauges
+	prm.Counters[metrics.PollCount] = 1
+	mu.Unlock()
 
-	prm.Counters[metrics.PollCount] += 1
-
-	err := a.storage.PutMetrics(ctx, *prm)
-	if err != nil {
-		a.handleError(err)
-	}
+	metricsCh <- *prm
 
 	log.Println("Metrics updated")
+}
+
+func (a *Agent) gopsutilUpdate(metricsCh chan<- metrics.Metrics) {
+	var mu sync.RWMutex
+	prm := metrics.New()
+
+	c, err := cpu.Counts(true)
+	if err != nil {
+		a.handleError(fmt.Errorf("error getting metrics via `gopsutil` package - %w", err))
+	}
+	gauges := make(map[metrics.Name]metrics.Gauge, c+2)
+
+	cpus, err := cpu.Percent(time.Duration(0), true)
+	if err != nil {
+		a.handleError(fmt.Errorf("error getting metrics via `gopsutil` package - %w", err))
+	}
+	mu.Lock()
+
+	for i := 0; i < c; i++ {
+		gauges[metrics.Name("CPUutilization"+strconv.Itoa(i))] = metrics.Gauge(cpus[i])
+	}
+
+	v, err := mem.VirtualMemory()
+	if err != nil {
+		a.handleError(fmt.Errorf("error getting metrics via `gopsutil` package - %w", err))
+	}
+	gauges[metrics.TotalMemory] = metrics.Gauge(v.Total)
+	gauges[metrics.FreeMemory] = metrics.Gauge(v.Free)
+
+	prm.Gauges = gauges
+	mu.Unlock()
+
+	metricsCh <- *prm
+
+	log.Println("Updated metrics via `gopsutil` package")
 }

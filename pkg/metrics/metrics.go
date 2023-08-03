@@ -12,7 +12,7 @@ const (
 	TypeGauge   = "gauge"
 	TypeCounter = "counter"
 
-	GaugeLen   = 28
+	GaugeLen   = 31
 	CounterLen = 1
 
 	Alloc         = Name("Alloc")
@@ -43,7 +43,10 @@ const (
 	NumForcedGC   = Name("NumForcedGC")
 	NumGC         = Name("NumGC")
 	RandomValue   = Name("RandomValue")
-	PollCount     = Name("PollCount")
+	TotalMemory   = Name("TotalMemory")
+	FreeMemory    = Name("FreeMemory")
+
+	PollCount = Name("PollCount")
 )
 
 type Name string
