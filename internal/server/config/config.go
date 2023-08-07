@@ -12,6 +12,7 @@ type Config struct {
 	Filename string `env:"FILE_STORAGE_PATH"`
 	Restore  bool   `env:"RESTORE"`
 	DSN      string `env:"DATABASE_DSN"`
+	Key      string `env:"KEY"`
 }
 
 func ParseConfig() (Config, error) {
@@ -32,6 +33,9 @@ func ParseConfig() (Config, error) {
 	flag.StringVar(&config.DSN,
 		"d", "",
 		"Connection string in Postgres format")
+	flag.StringVar(&config.Key,
+		"k", "",
+		"Sing key")
 
 	flag.Parse()
 
@@ -55,6 +59,9 @@ func ParseConfig() (Config, error) {
 	}
 	if _, ok := os.LookupEnv("DATABASE_DSN"); ok {
 		config.DSN = envConfig.DSN
+	}
+	if _, ok := os.LookupEnv("KEY"); ok {
+		config.Key = envConfig.Key
 	}
 
 	return *config, nil

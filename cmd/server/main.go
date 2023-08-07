@@ -27,7 +27,7 @@ func main() {
 		dbStorage = db.New(cfg.DSN)
 	}
 
-	h := handlers.New(chi.NewRouter(), dbStorage, cfg.Filename, cfg.Restore)
+	h := handlers.New(chi.NewRouter(), dbStorage, cfg.Filename, cfg.Restore, cfg.Key)
 	server := http.Server{
 		Addr:    cfg.Address,
 		Handler: h.GetRouter(),
